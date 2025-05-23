@@ -30,6 +30,7 @@ class Boid:
         self.acceleration = pygame.Vector2(0, 0)
 
     def update(self):
+        # Met à jour la position du boid en fonction de sa vitesse et de son accélération
         self.velocity += self.acceleration          # On applique l’accélération à la vitesse
         if self.velocity.length() > MAX_SPEED:      # On limite la vitesse (évite que le boid "déraille")
             self.velocity.scale_to_length(MAX_SPEED)
@@ -67,6 +68,7 @@ class Boid:
     ### Les 3 règles du modèle Boids ###
 
     def align(self, boids):
+        # Aligner le boid avec la direction moyenne de ses voisins
         steering = pygame.Vector2()     #  le vecteur final à retourner (la "force" à appliquer)
         total = 0                       # combien de voisins on a trouvés    
         avg_vector = pygame.Vector2()   # cumul des vitesses des voisins
@@ -86,6 +88,7 @@ class Boid:
         return steering                                     # On retourne la force d’ajustement
 
     def cohesion(self, boids):
+        # Rapprocher le boid du centre de masse de ses voisins
         steering = pygame.Vector2()
         total = 0
         center_mass = pygame.Vector2() # pour additionner les positions des voisins
@@ -157,12 +160,62 @@ class Boid:
                 steering.scale_to_length(MAX_FORCE)
             self.apply_force(steering * 1.5) # On donne plus d'importance à l'évitement de l'obstacle
 
+    def avoid_falcon(self, falcon_pos, danger_radius):
+        # Cette méthode permet au boid de fuir le faucon s’il s’en approche trop.
+        # Plus le faucon est proche, plus la force de fuite est forte.
+        distance = self.position.distance_to(falcon_pos)    # Distance entre le boid et le faucon
+        if distance < danger_radius:                        # Si le faucon est dans la zone de danger
+            diff = self.position - falcon_pos               # Crée un vecteur de répulsion loin du faucon
+            if distance > 0:                                # Même principe que pour l’obstacle
+                diff /= distance
+            diff = diff.normalize() * MAX_SPEED
+            steering = diff - self.velocity
+            if steering.length() > MAX_FORCE:
+                steering.scale_to_length(MAX_FORCE)
+            self.apply_force(steering * 2.0)  # force plus forte que l'obstacle
+
+class Falcon:
+    def __init__(self):
+        self.position = pygame.Vector2(WIDTH // 2, HEIGHT // 2) # position initiale du faucon (au centre de la fenêtre)
+        self.speed = 4  # vitesse constante à laquelle le faucon se déplace
+
+    def update(self, keys):
+        # Permet de déplacer le faucon avec ZQSD ou les flèches directionnelles
+        if keys[pygame.K_LEFT] or keys[pygame.K_q]:
+            self.position.x -= self.speed
+        if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+            self.position.x += self.speed
+        if keys[pygame.K_UP] or keys[pygame.K_z]:
+            self.position.y -= self.speed
+        if keys[pygame.K_DOWN] or keys[pygame.K_s]:
+            self.position.y += self.speed
+
+        self.edges() # Permet de faire réapparaître le faucon de l'autre côté de l'écran s'il sort
+
+    def draw(self, screen):
+        # Dessine le faucon sous forme de cercle rouge
+        pygame.draw.circle(screen, (255, 0, 0), self.position, 10)
+    
+    def edges(self):
+        # Si le faucon sort de la fenêtre, il réapparaît de l’autre côté
+        if self.position.x > WIDTH:
+            self.position.x = 0
+        elif self.position.x < 0:
+            self.position.x = WIDTH
+        if self.position.y > HEIGHT:
+            self.position.y = 0
+        elif self.position.y < 0:
+            self.position.y = HEIGHT
+
 # Créer les boids
 boids = [Boid() for _ in range(NUM_BOIDS)]
 # Position de l'obstacle et son rayon
 OBSTACLE_POS = pygame.Vector2(WIDTH // 2, HEIGHT // 2)  # position de l'obstacle
 OBSTACLE_RADIUS = 40                                    # rayon de l'obstacle
 AVOID_RADIUS = 120                                      # distance de sécurité autour de l'obstacle
+
+falcon = Falcon()
+DANGER_RADIUS = 100  # distance à laquelle les boids fuient le faucon
 
 # Boucle principale
 running = True
@@ -174,14 +227,21 @@ while running:
         if event.type == pygame.QUIT:
             running = False
 
+    keys = pygame.key.get_pressed() # Récupère l'état des touches du clavier (flèches ou ZQSD)
+    falcon.update(keys)             # Et met à jour la position du faucon en conséquence
+
     for boid in boids:      # Pour chaque boid
         boid.flock(boids)   # On applique les forces de séparation, d’alignement et de cohésion
         boid.avoid_obstacle(OBSTACLE_POS, AVOID_RADIUS) # On applique la force d’évitement de l’obstacle
+        boid.avoid_falcon(falcon.position, DANGER_RADIUS) # On applique la force d’évitement du faucon
         boid.update()       # On met à jour la position et la vitesse du boid ( Grace a l'accélération récupérée )
         boid.draw(screen)   # On dessine le boid à l’écran
+
+    falcon.draw(screen) # On dessine le faucon à l’écran
 
     pygame.draw.circle(screen, (200, 0, 0), OBSTACLE_POS, OBSTACLE_RADIUS)  # Dessine l'obstacle (rouge)
     pygame.display.flip()   # Affiche à l'écran tout ce qui a été dessiné pendant cette frame (double buffering)
 
+print("Simulation terminee. A bientot !")
 pygame.quit()   # On ferme proprement Pygame
 sys.exit()      # On quitte le programme Python
