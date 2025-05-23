@@ -7,7 +7,7 @@ import sys
 WIDTH, HEIGHT = 800, 600 # Taille de la fenêtre
 NUM_BOIDS = 50 # Nombre de boids
 MAX_SPEED = 4 # Vitesse maximale qu’un boid peut atteindre
-MAX_FORCE = 0.05 # Force maximale d’ajustement de trajectoire
+MAX_FORCE = 0.08 # Force maximale d’ajustement de trajectoire
 RADIUS = 50  # Rayon d’influence (distance d’interaction)
 
 # Initialiser pygame
@@ -142,8 +142,27 @@ class Boid:
         # qui sera utilisée au prochain update pour modifier la vitesse
         self.acceleration += force
 
+    def avoid_obstacle(self, obstacle_pos, avoid_radius):
+        # Éviter un obstacle en appliquant une force de répulsion
+        # On mesure la distance entre le boid et le centre de l’obstacle (qui est un cercle)
+        distance = self.position.distance_to(obstacle_pos)
+        if distance < avoid_radius:
+            # Crée un vecteur de répulsion loin de l'obstacle
+            diff = self.position - obstacle_pos
+            if distance > 0:
+                diff /= distance  # plus on est proche, plus on est repoussé
+            diff = diff.normalize() * MAX_SPEED # Même que pour les 3 regles de base
+            steering = diff - self.velocity
+            if steering.length() > MAX_FORCE:
+                steering.scale_to_length(MAX_FORCE)
+            self.apply_force(steering * 1.5) # On donne plus d'importance à l'évitement de l'obstacle
+
 # Créer les boids
 boids = [Boid() for _ in range(NUM_BOIDS)]
+# Position de l'obstacle et son rayon
+OBSTACLE_POS = pygame.Vector2(WIDTH // 2, HEIGHT // 2)  # position de l'obstacle
+OBSTACLE_RADIUS = 40                                    # rayon de l'obstacle
+AVOID_RADIUS = 120                                      # distance de sécurité autour de l'obstacle
 
 # Boucle principale
 running = True
@@ -157,9 +176,11 @@ while running:
 
     for boid in boids:      # Pour chaque boid
         boid.flock(boids)   # On applique les forces de séparation, d’alignement et de cohésion
+        boid.avoid_obstacle(OBSTACLE_POS, AVOID_RADIUS) # On applique la force d’évitement de l’obstacle
         boid.update()       # On met à jour la position et la vitesse du boid ( Grace a l'accélération récupérée )
         boid.draw(screen)   # On dessine le boid à l’écran
 
+    pygame.draw.circle(screen, (200, 0, 0), OBSTACLE_POS, OBSTACLE_RADIUS)  # Dessine l'obstacle (rouge)
     pygame.display.flip()   # Affiche à l'écran tout ce qui a été dessiné pendant cette frame (double buffering)
 
 pygame.quit()   # On ferme proprement Pygame
